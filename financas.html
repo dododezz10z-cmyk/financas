@@ -147,9 +147,12 @@ const CATEGORIES = [
 ];
 
 const PIE_COLORS = ["#4CAF82","#E8829A","#6366F1","#F59E0B","#06B6D4","#EF4444","#8B5CF6","#10B981","#F97316","#3B82F6","#EC4899","#84CC16"];
-const CARDS_LIST  = ["Nubank","Itaú","Bradesco","Santander","Inter","C6 Bank","XP","BTG","Outro"];
+// CARDS_LIST is now dynamic — loaded from state.creditLimit.byCard
 const MONTHS_PT   = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const LIMITS_DEFAULT = { total:15000, byCard:{Nubank:5000,Itaú:4000,Bradesco:3000,Santander:3000,Inter:2000,"C6 Bank":2000,XP:2000,BTG:2000,Outro:2000} };
+const LIMITS_DEFAULT = { byCard:{"Nubank":5000,"Itaú":4000,"Bradesco":3000,"Santander":3000,"Inter":2000,"C6 Bank":2000,"XP":2000,"Outro":2000} };
+function getCardsList(){ return Object.keys(state.creditLimit.byCard||{}); }
+// totalLimit is now always sum of all cards
+function calcTotalLimit(){ return Object.values(state.creditLimit.byCard||{}).reduce((s,v)=>s+v,0); }
 const FIXED_DEFAULT  = [
   {id:"f1",name:"Aluguel",amount:2500,category:"casa",owner:"Ambos",dueDay:5},
   {id:"f2",name:"Internet",amount:120,category:"casa",owner:"Ambos",dueDay:10},
@@ -631,7 +634,7 @@ function buildModal(t) {
       <div class="modal-header"><h2 style="font-size:18px;font-weight:700;color:#1A1D2E">🔁 Novo Recorrente</h2><button class="close-btn" id="modal-close">×</button></div>
       <div class="form-group"><label>👤 Usuário</label><div style="padding:11px 14px;background:${t.primaryLight};border-radius:10px;border:1.5px solid ${t.cardBorder};color:${t.primaryDark};font-weight:600;font-size:14px">${state.activeUser}</div></div>
       <div class="form-group"><label>💳 Tipo</label><select class="input-field" id="rc-type"><option value="credit">Cartão de Crédito</option><option value="debit">Despesa Geral</option></select></div>
-      <div class="form-group" id="rc-card-group"><label>💳 Cartão</label><select class="input-field" id="rc-card">${CARDS_LIST.map(c=>`<option>${c}</option>`).join("")}</select></div>
+      <div class="form-group" id="rc-card-group"><label>💳 Cartão</label><select class="input-field" id="rc-card">${getCardsList().map(c=>`<option>${c}</option>`).join("")}</select></div>
       <div class="form-group"><label>🏷️ Categoria</label><select class="input-field" id="rc-category">${catOptions}</select></div>
       <div class="form-group"><label>💰 Valor (R$)</label><input class="input-field" id="rc-amount" type="number" inputmode="decimal" placeholder="0,00"></div>
       <div class="form-group"><label>📝 Descrição</label><input class="input-field" id="rc-description" type="text" placeholder="Ex: Academia, Netflix..."></div>
@@ -642,13 +645,26 @@ function buildModal(t) {
 
   if(state.modal==="limits") {
     const byCard=state.creditLimit.byCard||{};
+    const cards=Object.keys(byCard).length>0?Object.keys(byCard):["Nubank","Itaú","Bradesco","Santander","Inter","C6 Bank","XP"];
+    const totalNow=Object.values(byCard).reduce((s,v)=>s+v,0);
+    const cardRows=cards.map(card=>`
+      <div class="form-group" style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <label>💳 Nome do cartão</label>
+          <input class="input-field lim-card-name" type="text" value="${card}" placeholder="Ex: Nubank" style="margin-bottom:6px">
+          <input class="input-field lim-card-value" type="number" inputmode="decimal" value="${byCard[card]||""}" placeholder="Limite (R$)">
+        </div>
+        <button class="btn-remove-card action-btn del-btn" style="margin-bottom:2px;flex-shrink:0" title="Remover cartão">×</button>
+      </div>`).join("");
     return `<div class="overlay" id="modal-overlay"><div class="modal">
-      <div class="modal-header"><h2 style="font-size:18px;font-weight:700">💳 Limites de Crédito</h2><button class="close-btn" id="modal-close">×</button></div>
-      <div class="form-group"><label>🏦 Limite Total Compartilhado (R$)</label><input class="input-field" id="lim-total" type="number" value="${state.creditLimit.total||0}"></div>
-      <p style="font-size:13px;font-weight:600;color:#6B7280;margin-bottom:10px">Limite por cartão (R$)</p>
-      ${CARDS_LIST.map(card=>`<div class="form-group"><label>💳 ${card}</label><input class="input-field" id="lim-${card.replace(/\s/g,'-')}" type="number" value="${byCard[card]||""}" placeholder="0,00"></div>`).join("")}
-      <div style="padding:10px 14px;background:#F8F9FB;border-radius:10px;margin-bottom:14px"><p id="lim-sum" style="font-size:13px;color:#6B7280">Soma: —</p></div>
-      <button id="btn-save-limits" style="width:100%;background:${t.gradient};color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer">Salvar Limites</button>
+      <div class="modal-header"><h2 style="font-size:18px;font-weight:700">💳 Cartões e Limites</h2><button class="close-btn" id="modal-close">×</button></div>
+      <p style="font-size:13px;color:#6B7280;margin-bottom:14px">Edite, remova ou adicione cartões. O limite total é calculado automaticamente.</p>
+      <div id="cards-list">${cardRows}</div>
+      <button id="btn-add-card" style="width:100%;background:#F0F4FF;color:#4338CA;border:1.5px dashed #C7D2FE;border-radius:12px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:14px">+ Adicionar cartão</button>
+      <div style="padding:12px 16px;background:${t.primaryLight};border-radius:12px;border:1px solid ${t.cardBorder};margin-bottom:14px">
+        <p style="font-size:13px;color:${t.primaryDark};font-weight:600">💰 Limite total: <span id="lim-total-display">${new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(totalNow)}</span></p>
+      </div>
+      <button id="btn-save-limits" style="width:100%;background:${t.gradient};color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer">Salvar</button>
     </div></div>`;
   }
 
@@ -835,14 +851,56 @@ function bindModalEvents() {
   }
 
   if(state.modal==="limits") {
-    const updateSum=()=>{ const sum=CARDS_LIST.reduce((s,c)=>s+(parseFloat(document.getElementById(`lim-${c.replace(/\s/g,"-")}`)?.value||"0")||0),0); const el=document.getElementById("lim-sum"); if(el) el.textContent=`Soma dos cartões: ${fmtBRL(sum)}`; };
-    CARDS_LIST.forEach(c=>{ const el=document.getElementById(`lim-${c.replace(/\s/g,"-")}`); if(el) el.addEventListener("input",updateSum); }); updateSum();
-    on("btn-save-limits","click",()=>{
-      const total=parseFloat(document.getElementById("lim-total")?.value||"0")||0;
-      const byCard={};
-      CARDS_LIST.forEach(c=>{ const v=parseFloat(document.getElementById(`lim-${c.replace(/\s/g,"-")}`)?.value||"0")||0; if(v>0) byCard[c]=v; });
-      set(ref(db,"creditLimit"),{total,byCard}); showToast("Limites salvos! ✓"); state.modal=null; render();
+    const getCardRows=()=>Array.from(document.querySelectorAll("#cards-list .form-group"));
+    const calcTotal=()=>{
+      let sum=0;
+      getCardRows().forEach(row=>{
+        const v=parseFloat(row.querySelector(".lim-card-value")?.value||"0")||0;
+        sum+=v;
+      });
+      return sum;
+    };
+    const updateTotal=()=>{
+      const el=document.getElementById("lim-total-display");
+      if(el) el.textContent=fmtBRL(calcTotal());
+    };
+    // Live update total on input
+    document.getElementById("cards-list")?.addEventListener("input", updateTotal);
+
+    // Add card button
+    on("btn-add-card","click",()=>{
+      const list=document.getElementById("cards-list"); if(!list) return;
+      const div=document.createElement("div");
+      div.className="form-group";
+      div.style.cssText="display:flex;gap:8px;align-items:flex-end";
+      div.innerHTML=`<div style="flex:1">
+        <label>💳 Nome do cartão</label>
+        <input class="input-field lim-card-name" type="text" placeholder="Ex: Inter" style="margin-bottom:6px">
+        <input class="input-field lim-card-value" type="number" inputmode="decimal" placeholder="Limite (R$)">
+      </div>
+      <button class="btn-remove-card action-btn del-btn" style="margin-bottom:2px;flex-shrink:0" title="Remover">×</button>`;
+      div.querySelector(".btn-remove-card").onclick=()=>{ div.remove(); updateTotal(); };
+      div.querySelector(".lim-card-value").addEventListener("input", updateTotal);
+      list.appendChild(div);
     });
+
+    // Remove card buttons (existing)
+    document.querySelectorAll(".btn-remove-card").forEach(btn=>{
+      btn.onclick=()=>{ btn.closest(".form-group").remove(); updateTotal(); };
+    });
+
+    on("btn-save-limits","click",()=>{
+      const byCard={};
+      getCardRows().forEach(row=>{
+        const name=row.querySelector(".lim-card-name")?.value?.trim();
+        const val=parseFloat(row.querySelector(".lim-card-value")?.value||"0")||0;
+        if(name && val>0) byCard[name]=val;
+      });
+      if(Object.keys(byCard).length===0){ alert("Adicione pelo menos um cartão com limite."); return; }
+      const total=Object.values(byCard).reduce((s,v)=>s+v,0);
+      set(ref(db,"creditLimit"),{byCard,total}); showToast("Cartões salvos! ✓"); state.modal=null; render();
+    });
+    updateTotal();
   }
 
   if(state.modal==="fixed") {
@@ -864,7 +922,7 @@ document.getElementById("login-screen").style.display="flex";
 // ─── PWA Service Worker ───────────────────────────────────────────
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/financas/sw.js")
+    navigator.serviceWorker.register("/sw.js")
       .then(reg => console.log("SW registrado:", reg.scope))
       .catch(err => console.log("SW erro:", err));
   });
