@@ -2,7 +2,7 @@
   "name": "Finanças Douglas & Anna",
   "short_name": "Finanças",
   "description": "Controle financeiro compartilhado",
-  "start_url": "/financas.html",
+  "start_url": "/financas/financas.html",
   "display": "standalone",
   "background_color": "#F7F8FA",
   "theme_color": "#4CAF82",
